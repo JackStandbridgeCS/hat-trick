@@ -1,76 +1,89 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import beaver from "../assets/beaver.svg";
-import { hcWithType } from "server/dist/client";
-import "../App.css";
+import { useState, useMemo, useEffect } from "react";
+import { uniqueId } from "tldraw";
+import { NameModal } from "../components/NameModal";
+import { Whiteboard } from "../components/Whiteboard";
 
 export const Route = createFileRoute("/")({
 	component: Index,
 });
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
+// Generate a random room ID
+function generateRoomId(): string {
+	const adjectives = ["happy", "swift", "bright", "calm", "wild", "cool", "warm", "bold"];
+	const nouns = ["panda", "eagle", "river", "cloud", "star", "moon", "wave", "tree"];
+	const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+	const noun = nouns[Math.floor(Math.random() * nouns.length)];
+	const num = Math.floor(Math.random() * 1000);
+	return `${adj}-${noun}-${num}`;
+}
 
-const client = hcWithType(SERVER_URL);
+// Get room ID from URL hash or generate a new one
+function getRoomIdFromHash(): string | null {
+	const hash = window.location.hash.slice(1); // Remove the #
+	return hash || null;
+}
 
-type ResponseType = Awaited<ReturnType<typeof client.hello.$get>>;
+// Set room ID in URL hash
+function setRoomIdInHash(roomId: string): void {
+	window.location.hash = roomId;
+}
+
+// Generate a random warm/pastel color for user cursor
+function generateUserColor(): string {
+	const hue = Math.floor(Math.random() * 360);
+	return `hsl(${hue}, 70%, 55%)`;
+}
 
 function Index() {
-	const [data, setData] = useState<
-		Awaited<ReturnType<ResponseType["json"]>> | undefined
-	>();
+	const [userName, setUserName] = useState<string | null>(null);
+	const [roomId, setRoomId] = useState<string | null>(null);
+	const [userColor] = useState(() => generateUserColor());
+	const userId = useMemo(() => uniqueId(), []);
 
-	async function sendRequest() {
-		try {
-			const res = await client.hello.$get();
-			if (!res.ok) {
-				console.log("Error fetching data");
-				return;
-			}
-			const data = await res.json();
-			setData(data);
-		} catch (error) {
-			console.log(error);
+	// Initialize room ID from URL or generate new one
+	useEffect(() => {
+		let id = getRoomIdFromHash();
+		if (!id) {
+			id = generateRoomId();
+			setRoomIdInHash(id);
 		}
+		setRoomId(id);
+
+		// Listen for hash changes (e.g., user manually edits URL)
+		const handleHashChange = () => {
+			const newId = getRoomIdFromHash();
+			if (newId && newId !== roomId) {
+				// Reload to join new room
+				window.location.reload();
+			}
+		};
+
+		window.addEventListener("hashchange", handleHashChange);
+		return () => window.removeEventListener("hashchange", handleHashChange);
+	}, [roomId]);
+
+	function handleNameSubmit(name: string) {
+		setUserName(name);
+	}
+
+	// Show loading until we have room ID
+	if (!roomId) {
+		return null;
+	}
+
+	// Show name modal if user hasn't entered name
+	if (!userName) {
+		return <NameModal onSubmit={handleNameSubmit} />;
 	}
 
 	return (
-		<>
-			<div>
-				<a
-					href="https://github.com/stevedylandev/bhvr"
-					target="_blank"
-					rel="noopener"
-				>
-					<img src={beaver} className="logo" alt="beaver logo" />
-				</a>
-			</div>
-			<h1>bhvr</h1>
-			<h2>Bun + Hono + Vite + React</h2>
-			<p>A typesafe fullstack monorepo</p>
-			<div className="card">
-				<div className="button-container">
-					<button type="button" onClick={sendRequest}>
-						Call API
-					</button>
-					<a
-						className="docs-link"
-						target="_blank"
-						href="https://bhvr.dev"
-						rel="noopener"
-					>
-						Docs
-					</a>
-				</div>
-				{data && (
-					<pre className="response">
-						<code>
-							Message: {data.message} <br />
-							Success: {data.success.toString()}
-						</code>
-					</pre>
-				)}
-			</div>
-		</>
+		<Whiteboard
+			roomId={roomId}
+			userName={userName}
+			userColor={userColor}
+			userId={userId}
+		/>
 	);
 }
 

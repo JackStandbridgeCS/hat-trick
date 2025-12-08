@@ -14,7 +14,9 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "server": "workspace:*",
-    "shared": "workspace:*"
+    "shared": "workspace:*",
+    "tldraw": "^4.2.1",
+    "trystero": "^0.22.0"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "^1.140.0",
