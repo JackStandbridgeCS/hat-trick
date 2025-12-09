@@ -1,7 +1,10 @@
 import { useSync, useSyncDemo } from '@tldraw/sync'
 import { ReactNode, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Tldraw, uniqueId } from 'tldraw'
+import { Editor, Tldraw, uniqueId } from 'tldraw'
+import { CursorHatsOverlay } from '../components/CursorHatsOverlay'
+import { HatType } from '../components/Hats'
+import { HatSelector } from '../components/HatSelector'
 import { NameModal } from '../components/NameModal'
 import { getBookmarkPreview } from '../getBookmarkPreview'
 import { getLocalStorageItem, setLocalStorageItem } from '../localStorage'
@@ -14,6 +17,7 @@ interface UserInfo {
 	name: string
 	color: string
 	id: string
+	hat: HatType
 }
 
 export function Room() {
@@ -25,12 +29,14 @@ export function Room() {
 	useEffect(() => {
 		const storedName = getLocalStorageItem('user-name')
 		const storedColor = getLocalStorageItem('user-color')
+		const storedHat = (getLocalStorageItem('user-hat') as HatType) || 'tophat'
 
 		if (storedName && storedColor) {
 			setUserInfo({
 				name: storedName,
 				color: storedColor,
 				id: getLocalStorageItem('user-id') || createUserId(),
+				hat: storedHat,
 			})
 		}
 	}, [])
@@ -39,12 +45,14 @@ export function Room() {
 	function handleJoin(name: string, newRoomId: string) {
 		const color = generateUserColor()
 		const id = createUserId()
+		const hat: HatType = (getLocalStorageItem('user-hat') as HatType) || 'tophat'
 
 		setLocalStorageItem('user-name', name)
 		setLocalStorageItem('user-color', color)
 		setLocalStorageItem('user-id', id)
+		setLocalStorageItem('user-hat', hat)
 
-		setUserInfo({ name, color, id })
+		setUserInfo({ name, color, id, hat })
 
 		// If they entered a different room ID, navigate there
 		if (newRoomId !== roomId) {
@@ -57,10 +65,33 @@ export function Room() {
 		return <NameModal onSubmit={handleJoin} defaultRoomId={roomId} />
 	}
 
-	return <RoomContent roomId={roomId!} userInfo={userInfo} />
+	return (
+		<RoomContent
+			roomId={roomId!}
+			userInfo={userInfo}
+			onHatChange={(hat) => {
+				setLocalStorageItem('user-hat', hat)
+				setUserInfo({ ...userInfo, hat })
+			}}
+		/>
+	)
 }
 
-function RoomContent({ roomId, userInfo }: { roomId: string; userInfo: UserInfo }) {
+function RoomContent({
+	roomId,
+	userInfo,
+	onHatChange,
+}: {
+	roomId: string
+	userInfo: UserInfo
+	onHatChange: (hat: HatType) => void
+}) {
+	const [editor, setEditor] = useState<Editor | null>(null)
+
+	// Encode hat type in the name field (format: "Name|hatType")
+	// This is necessary because tldraw's userInfo only supports id, name, color
+	const encodedName = `${userInfo.name}|${userInfo.hat}`
+
 	// Use different sync methods for dev vs production
 	const store = isProduction
 		? useSync({
@@ -68,7 +99,7 @@ function RoomContent({ roomId, userInfo }: { roomId: string; userInfo: UserInfo 
 				assets: multiplayerAssetStore,
 				userInfo: {
 					id: userInfo.id,
-					name: userInfo.name,
+					name: encodedName,
 					color: userInfo.color,
 				},
 			})
@@ -76,21 +107,26 @@ function RoomContent({ roomId, userInfo }: { roomId: string; userInfo: UserInfo 
 				roomId: roomId,
 				userInfo: {
 					id: userInfo.id,
-					name: userInfo.name,
+					name: encodedName,
 					color: userInfo.color,
 				},
 			})
 
 	return (
-		<RoomWrapper roomId={roomId} userName={userInfo.name}>
-			<Tldraw
-				store={store}
-				deepLinks
-				onMount={(editor) => {
-					editor.registerExternalAssetHandler('url', getBookmarkPreview)
-				}}
-			/>
-		</RoomWrapper>
+		<>
+			<RoomWrapper roomId={roomId} userName={userInfo.name}>
+				<Tldraw
+					store={store}
+					deepLinks
+					onMount={(e) => {
+						setEditor(e)
+						e.registerExternalAssetHandler('url', getBookmarkPreview)
+					}}
+				/>
+			</RoomWrapper>
+			<CursorHatsOverlay editor={editor} />
+			<HatSelector selectedHat={userInfo.hat} onSelectHat={onHatChange} />
+		</>
 	)
 }
 
