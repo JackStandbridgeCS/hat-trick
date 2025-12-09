@@ -1,8 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Editor } from 'tldraw'
-import { HATS, HatType, isCustomHat, getCustomHatId, CustomHatData } from './Hats'
+import { HATS, HatType, isCustomHat, isUrlHat, getCustomHatId, getUrlHatUrl, CustomHatData } from './Hats'
 import { getLocalStorageItem } from '../localStorage'
+
+// Default hat size
+const DEFAULT_HAT_SIZE = 64
+
+// Load hat size from localStorage
+function loadHatSize(): number {
+	try {
+		const stored = getLocalStorageItem('user-hat-size')
+		if (stored) {
+			const size = parseInt(stored, 10)
+			if (!isNaN(size) && size >= 24 && size <= 128) {
+				return size
+			}
+		}
+	} catch (error) {
+		console.warn('Failed to load hat size:', error)
+	}
+	return DEFAULT_HAT_SIZE
+}
 
 interface ThrownHat {
 	id: string
@@ -45,15 +64,28 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 	const [dragState, setDragState] = useState<DragState | null>(null)
 	const [isShiftHeld, setIsShiftHeld] = useState(false)
 	const [customHats, setCustomHats] = useState<CustomHatData[]>([])
+	const [hatSize, setHatSize] = useState(DEFAULT_HAT_SIZE)
 	const animationFrameRef = useRef<number | null>(null)
 
 	// Use refs to avoid stale closures in event handlers
 	const dragStateRef = useRef<DragState | null>(null)
 	const isShiftHeldRef = useRef(false)
 
-	// Load custom hats
+	// Load custom hats and hat size
 	useEffect(() => {
 		setCustomHats(loadCustomHats())
+		setHatSize(loadHatSize())
+
+		// Listen for hat size changes
+		const handleHatSizeChanged = (e: Event) => {
+			const customEvent = e as CustomEvent<number>
+			setHatSize(customEvent.detail)
+		}
+		window.addEventListener('hat-size-changed', handleHatSizeChanged)
+
+		return () => {
+			window.removeEventListener('hat-size-changed', handleHatSizeChanged)
+		}
 	}, [])
 
 	// Keep refs in sync with state
@@ -250,11 +282,11 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 			)}
 
 			{/* Power/Direction Arrow */}
-			{dragState && <PowerArrow editor={editor} dragState={dragState} customHats={customHats} />}
+			{dragState && <PowerArrow editor={editor} dragState={dragState} customHats={customHats} hatSize={hatSize} />}
 
 			{/* Thrown Hats */}
 			{thrownHats.map((hat) => (
-				<ThrownHatComponent key={hat.id} editor={editor} hat={hat} customHats={customHats} />
+				<ThrownHatComponent key={hat.id} editor={editor} hat={hat} customHats={customHats} hatSize={hatSize} />
 			))}
 
 			{/* Debug: show hat count */}
@@ -269,7 +301,7 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 }
 
 // Power arrow showing throw direction and strength
-function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragState: DragState; customHats: CustomHatData[] }) {
+function PowerArrow({ editor, dragState, customHats, hatSize }: { editor: Editor; dragState: DragState; customHats: CustomHatData[]; hatSize: number }) {
 	// Convert page coordinates to screen coordinates
 	const startScreen = editor.pageToScreen({ x: dragState.startX, y: dragState.startY })
 	const currentScreen = editor.pageToScreen({ x: dragState.currentX, y: dragState.currentY })
@@ -293,6 +325,22 @@ function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragSta
 
 	// Render the hat preview (built-in or custom)
 	const renderHatPreview = () => {
+		// URL-based hat (server-hosted)
+		if (isUrlHat(currentHatType)) {
+			const url = getUrlHatUrl(currentHatType)
+			return (
+				<img
+					src={url}
+					alt="Custom hat"
+					style={{
+						width: '100%',
+						height: '100%',
+						objectFit: 'contain',
+					}}
+				/>
+			)
+		}
+		// Local custom hat
 		if (isCustomHat(currentHatType)) {
 			const customHatId = getCustomHatId(currentHatType)
 			const customHat = customHats.find((h) => h.id === customHatId)
@@ -310,8 +358,19 @@ function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragSta
 				)
 			}
 		}
+		// Built-in hat
 		const hatData = HATS[currentHatType as HatType]
-		return hatData?.svg || HATS.tophat.svg
+		return (
+			<img
+				src={hatData?.imgUrl || HATS.tophat.imgUrl}
+				alt={hatData?.name || 'Hat'}
+				style={{
+					width: '100%',
+					height: '100%',
+					objectFit: 'contain',
+				}}
+			/>
+		)
 	}
 
 	if (distance < 10) return null
@@ -353,10 +412,10 @@ function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragSta
 				style={{
 					position: 'fixed',
 					left: startScreen.x,
-					top: startScreen.y - 40,
+					top: startScreen.y - hatSize * 0.6,
 					transform: 'translateX(-50%)',
-					width: 32,
-					height: 32,
+					width: hatSize,
+					height: hatSize,
 					filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
 				}}
 			>
@@ -367,12 +426,28 @@ function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragSta
 }
 
 // Thrown hat flying through the air
-function ThrownHatComponent({ editor, hat, customHats }: { editor: Editor; hat: ThrownHat; customHats: CustomHatData[] }) {
+function ThrownHatComponent({ editor, hat, customHats, hatSize }: { editor: Editor; hat: ThrownHat; customHats: CustomHatData[]; hatSize: number }) {
 	// Convert page coordinates to screen coordinates
 	const screenPoint = editor.pageToScreen({ x: hat.x, y: hat.y })
 
-	// Render the hat (built-in or custom)
+	// Render the hat (built-in, URL-based, or local custom)
 	const renderHat = () => {
+		// URL-based hat (server-hosted)
+		if (isUrlHat(hat.hatType)) {
+			const url = getUrlHatUrl(hat.hatType)
+			return (
+				<img
+					src={url}
+					alt="Custom hat"
+					style={{
+						width: '100%',
+						height: '100%',
+						objectFit: 'contain',
+					}}
+				/>
+			)
+		}
+		// Local custom hat
 		if (isCustomHat(hat.hatType)) {
 			const customHatId = getCustomHatId(hat.hatType)
 			const customHat = customHats.find((h) => h.id === customHatId)
@@ -392,7 +467,17 @@ function ThrownHatComponent({ editor, hat, customHats }: { editor: Editor; hat: 
 		}
 		// Built-in hat
 		const hatData = HATS[hat.hatType as HatType]
-		return hatData?.svg || HATS.tophat.svg
+		return (
+			<img
+				src={hatData?.imgUrl || HATS.tophat.imgUrl}
+				alt={hatData?.name || 'Hat'}
+				style={{
+					width: '100%',
+					height: '100%',
+					objectFit: 'contain',
+				}}
+			/>
+		)
 	}
 
 	return (
@@ -402,8 +487,8 @@ function ThrownHatComponent({ editor, hat, customHats }: { editor: Editor; hat: 
 				left: screenPoint.x,
 				top: screenPoint.y,
 				transform: `translate(-50%, -50%) rotate(${hat.rotation}rad)`,
-				width: 40,
-				height: 40,
+				width: hatSize,
+				height: hatSize,
 				filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
 			}}
 		>
