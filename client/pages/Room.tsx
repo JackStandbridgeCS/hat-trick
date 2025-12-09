@@ -118,9 +118,11 @@ function RoomContent({
 				},
 			})
 
+	const navigate = useNavigate()
+
 	return (
 		<>
-			<RoomWrapper roomId={roomId} userName={userInfo.name}>
+			<RoomWrapper roomId={roomId} userName={userInfo.name} onExit={() => navigate('/')}>
 				<Tldraw
 					licenseKey='tldraw-2026-03-19/WyJ3Y21EMS1SVSIsWyIqIl0sMTYsIjIwMjYtMDMtMTkiXQ.8I0xARb9apxKZ8qvOTOcLot0dhCuP1SyDFsmhS0hnFeRs+RsbigdcAtQJ+r0N+yJ9D9zn7bQtwFC8Nls1y6IPQ'
 					store={store}
@@ -142,10 +144,12 @@ function RoomWrapper({
 	children,
 	roomId,
 	userName,
+	onExit,
 }: {
 	children: ReactNode
 	roomId?: string
 	userName: string
+	onExit: () => void
 }) {
 	const [didCopy, setDidCopy] = useState(false)
 
@@ -173,6 +177,13 @@ function RoomWrapper({
 				>
 					Copy link
 					{didCopy && <div className="RoomWrapper-copied">Copied!</div>}
+				</button>
+				<button
+					className="RoomWrapper-exit"
+					onClick={onExit}
+					aria-label="exit room"
+				>
+					Exit room
 				</button>
 			</div>
 			<div className="RoomWrapper-content">{children}</div>
