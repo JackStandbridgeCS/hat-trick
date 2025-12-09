@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Editor } from 'tldraw'
-import { HATS, HatType } from './Hats'
+import { HATS, HatType, isCustomHat, getCustomHatId, CustomHatData } from './Hats'
 import { getLocalStorageItem } from '../localStorage'
 
 interface ThrownHat {
@@ -12,8 +12,21 @@ interface ThrownHat {
 	velocityY: number
 	rotation: number
 	rotationSpeed: number
-	hatType: HatType
+	hatType: string // Can be HatType or custom hat type
 	startTime: number
+}
+
+// Load custom hats from localStorage
+function loadCustomHats(): CustomHatData[] {
+	try {
+		const stored = getLocalStorageItem('custom-hats')
+		if (stored) {
+			return JSON.parse(stored)
+		}
+	} catch (error) {
+		console.warn('Failed to load custom hats:', error)
+	}
+	return []
 }
 
 interface DragState {
@@ -31,12 +44,33 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 	const [thrownHats, setThrownHats] = useState<ThrownHat[]>([])
 	const [dragState, setDragState] = useState<DragState | null>(null)
 	const [isShiftHeld, setIsShiftHeld] = useState(false)
+	const [customHats, setCustomHats] = useState<CustomHatData[]>([])
 	const animationFrameRef = useRef<number | null>(null)
+
+	// Use refs to avoid stale closures in event handlers
+	const dragStateRef = useRef<DragState | null>(null)
+	const isShiftHeldRef = useRef(false)
+
+	// Load custom hats
+	useEffect(() => {
+		setCustomHats(loadCustomHats())
+	}, [])
+
+	// Keep refs in sync with state
+	useEffect(() => {
+		dragStateRef.current = dragState
+	}, [dragState])
+
+	useEffect(() => {
+		isShiftHeldRef.current = isShiftHeld
+	}, [isShiftHeld])
 
 	// Track shift key state
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Shift') setIsShiftHeld(true)
+			if (e.key === 'Shift') {
+				setIsShiftHeld(true)
+			}
 		}
 		const handleKeyUp = (e: KeyboardEvent) => {
 			if (e.key === 'Shift') {
@@ -60,56 +94,59 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 		const container = editor.getContainer()
 
 		const handlePointerDown = (e: PointerEvent) => {
-			if (!isShiftHeld) return
+			if (!isShiftHeldRef.current) return
 
 			// Prevent tldraw from handling this event
 			e.stopPropagation()
+			e.preventDefault()
 
 			// Convert screen to page coordinates
 			const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY })
 
-			setDragState({
+			const newDragState = {
 				startX: pagePoint.x,
 				startY: pagePoint.y,
 				currentX: pagePoint.x,
 				currentY: pagePoint.y,
-			})
+			}
+			setDragState(newDragState)
+			dragStateRef.current = newDragState
 		}
 
 		const handlePointerMove = (e: PointerEvent) => {
-			if (!dragState || !isShiftHeld) return
+			const currentDrag = dragStateRef.current
+			if (!currentDrag || !isShiftHeldRef.current) return
 
-			const screenX = e.clientX
-			const screenY = e.clientY
-			const pagePoint = editor.screenToPage({ x: screenX, y: screenY })
+			const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY })
 
-			setDragState((prev) =>
-				prev
-					? {
-							...prev,
-							currentX: pagePoint.x,
-							currentY: pagePoint.y,
-						}
-					: null
-			)
+			const updatedDrag = {
+				...currentDrag,
+				currentX: pagePoint.x,
+				currentY: pagePoint.y,
+			}
+			setDragState(updatedDrag)
+			dragStateRef.current = updatedDrag
 		}
 
 		const handlePointerUp = () => {
-			if (!dragState) return
+			const currentDrag = dragStateRef.current
+			if (!currentDrag) return
 
 			// Calculate throw vector (opposite direction of drag)
-			const dx = dragState.startX - dragState.currentX
-			const dy = dragState.startY - dragState.currentY
+			const dx = currentDrag.startX - currentDrag.currentX
+			const dy = currentDrag.startY - currentDrag.currentY
 			const distance = Math.sqrt(dx * dx + dy * dy)
+
+			console.log('[HatThrow] Pointer up, distance:', distance, 'drag:', currentDrag)
 
 			// Only throw if there's significant drag
 			if (distance > 20) {
-				const hatType = (getLocalStorageItem('user-hat') as HatType) || 'cowboy'
+				const hatType = getLocalStorageItem('user-hat') || 'cowboy'
 
 				const newHat: ThrownHat = {
 					id: `thrown-${Date.now()}-${Math.random()}`,
-					x: dragState.startX,
-					y: dragState.startY,
+					x: currentDrag.startX,
+					y: currentDrag.startY,
 					velocityX: dx * 0.15,
 					velocityY: dy * 0.15,
 					rotation: 0,
@@ -118,10 +155,15 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 					startTime: Date.now(),
 				}
 
-				setThrownHats((prev) => [...prev, newHat])
+				console.log('[HatThrow] Throwing hat:', newHat)
+				setThrownHats((prev) => {
+					console.log('[HatThrow] Previous hats:', prev.length, '-> adding new hat')
+					return [...prev, newHat]
+				})
 			}
 
 			setDragState(null)
+			dragStateRef.current = null
 		}
 
 		// Use capture phase to intercept before tldraw
@@ -134,7 +176,7 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 			window.removeEventListener('pointermove', handlePointerMove)
 			window.removeEventListener('pointerup', handlePointerUp)
 		}
-	}, [editor, isShiftHeld, dragState])
+	}, [editor]) // Only depend on editor now - refs handle the rest
 
 	// Physics animation loop for thrown hats
 	useEffect(() => {
@@ -208,19 +250,26 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 			)}
 
 			{/* Power/Direction Arrow */}
-			{dragState && <PowerArrow editor={editor} dragState={dragState} />}
+			{dragState && <PowerArrow editor={editor} dragState={dragState} customHats={customHats} />}
 
 			{/* Thrown Hats */}
 			{thrownHats.map((hat) => (
-				<ThrownHatComponent key={hat.id} editor={editor} hat={hat} />
+				<ThrownHatComponent key={hat.id} editor={editor} hat={hat} customHats={customHats} />
 			))}
+
+			{/* Debug: show hat count */}
+			{thrownHats.length > 0 && (
+				<div style={{ position: 'fixed', bottom: 10, left: 10, background: 'black', color: 'lime', padding: 4, fontSize: 12, zIndex: 999999 }}>
+					Thrown hats: {thrownHats.length}
+				</div>
+			)}
 		</div>,
 		document.body
 	)
 }
 
 // Power arrow showing throw direction and strength
-function PowerArrow({ editor, dragState }: { editor: Editor; dragState: DragState }) {
+function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragState: DragState; customHats: CustomHatData[] }) {
 	// Convert page coordinates to screen coordinates
 	const startScreen = editor.pageToScreen({ x: dragState.startX, y: dragState.startY })
 	const currentScreen = editor.pageToScreen({ x: dragState.currentX, y: dragState.currentY })
@@ -240,8 +289,30 @@ function PowerArrow({ editor, dragState }: { editor: Editor; dragState: DragStat
 	const power = Math.min(distance / 150, 1)
 	const hue = 120 - power * 120 // Green to red
 
-	const currentHat = (getLocalStorageItem('user-hat') as HatType) || 'cowboy'
-	const hatData = HATS[currentHat]
+	const currentHatType = getLocalStorageItem('user-hat') || 'cowboy'
+
+	// Render the hat preview (built-in or custom)
+	const renderHatPreview = () => {
+		if (isCustomHat(currentHatType)) {
+			const customHatId = getCustomHatId(currentHatType)
+			const customHat = customHats.find((h) => h.id === customHatId)
+			if (customHat) {
+				return (
+					<img
+						src={customHat.imageUrl}
+						alt={customHat.name}
+						style={{
+							width: '100%',
+							height: '100%',
+							objectFit: 'contain',
+						}}
+					/>
+				)
+			}
+		}
+		const hatData = HATS[currentHatType as HatType]
+		return hatData?.svg || HATS.tophat.svg
+	}
 
 	if (distance < 10) return null
 
@@ -289,17 +360,40 @@ function PowerArrow({ editor, dragState }: { editor: Editor; dragState: DragStat
 					filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
 				}}
 			>
-				{hatData?.svg}
+				{renderHatPreview()}
 			</div>
 		</>
 	)
 }
 
 // Thrown hat flying through the air
-function ThrownHatComponent({ editor, hat }: { editor: Editor; hat: ThrownHat }) {
+function ThrownHatComponent({ editor, hat, customHats }: { editor: Editor; hat: ThrownHat; customHats: CustomHatData[] }) {
 	// Convert page coordinates to screen coordinates
 	const screenPoint = editor.pageToScreen({ x: hat.x, y: hat.y })
-	const hatData = HATS[hat.hatType]
+
+	// Render the hat (built-in or custom)
+	const renderHat = () => {
+		if (isCustomHat(hat.hatType)) {
+			const customHatId = getCustomHatId(hat.hatType)
+			const customHat = customHats.find((h) => h.id === customHatId)
+			if (customHat) {
+				return (
+					<img
+						src={customHat.imageUrl}
+						alt={customHat.name}
+						style={{
+							width: '100%',
+							height: '100%',
+							objectFit: 'contain',
+						}}
+					/>
+				)
+			}
+		}
+		// Built-in hat
+		const hatData = HATS[hat.hatType as HatType]
+		return hatData?.svg || HATS.tophat.svg
+	}
 
 	return (
 		<div
@@ -313,7 +407,7 @@ function ThrownHatComponent({ editor, hat }: { editor: Editor; hat: ThrownHat })
 				filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
 			}}
 		>
-			{hatData?.svg}
+			{renderHat()}
 		</div>
 	)
 }
