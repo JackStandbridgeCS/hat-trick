@@ -1,290 +1,121 @@
-# bhvr 🦫
+# tldraw sync server
+
+This is a production-ready backend for [tldraw sync](https://tldraw.dev/docs/sync).
+
+- Your client-side tldraw-based app can be served from anywhere you want.
+- This backend uses [Cloudflare Workers](https://developers.cloudflare.com/workers/), and will need
+  to be deployed to your own Cloudflare account.
+- Each whiteboard is synced via
+  [WebSockets](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API) to a [Cloudflare
+  Durable Object](https://developers.cloudflare.com/durable-objects/).
+- Whiteboards and any uploaded images/videos are stored in a [Cloudflare
+  R2](https://developers.cloudflare.com/r2/) bucket.
+- Although unrelated to tldraw sync, this server also includes a component to fetch link previews
+  for URLs added to the canvas.
+  This is a minimal setup of the same system that powers multiplayer collaboration for hundreds of
+  thousands of rooms & users on www.tldraw.com. Because durable objects effectively create a mini
+  server instance for every single active room, we've never needed to worry about scale. Cloudflare
+  handles the tricky infrastructure work of ensuring there's only ever one instance of each room, and
+  making sure that every user gets connected to that instance. We've found that with this approach,
+  each room is able to handle about 50 simultaneous collaborators.
 
-![cover](https://cdn.stevedylan.dev/ipfs/bafybeievx27ar5qfqyqyud7kemnb5n2p4rzt2matogi6qttwkpxonqhra4)
+## Overview
 
-A full-stack TypeScript monorepo starter with shared types, using Bun, Hono, Vite, and React.
+[![architecture](./arch.png)](https://www.tldraw.com/ro/Yb_QHJFP9syPZq1YrV3YR?v=-255,-148,2025,1265&p=page)
 
-## Why bhvr?
+When a user opens a room, they connect via Workers to a durable object. Each durable object is like
+its own miniature server. There's only ever one for each room, and all the users of that room
+connect to it. When a user makes a change to the drawing, it's sent via a websocket connection to
+the durable object for that room. The durable object applies the change to its in-memory copy of the
+document, and broadcasts the change via websockets to all other connected clients. On a regular
+schedule, the durable object persists its contents to an R2 bucket. When the last client leaves the
+room, the durable object will shut down.
 
-While there are plenty of existing app building stacks out there, many of them are either bloated, outdated, or have too much of a vendor lock-in. bhvr is built with the opinion that you should be able to deploy your client or server in any environment while also keeping type safety.
+Static assets like images and videos are too big to be synced via websockets and a durable object.
+Instead, they're uploaded to workers which store them in the same R2 bucket as the rooms. When
+they're downloaded, they're cached on cloudflare's edge network to reduce costs and make serving
+them faster.
 
-## Quickstart
+## Development
 
-Make sure [bun](https://bun.sh) is installed
+To install dependencies, run `yarn`. To start a local development server, run `yarn dev`. This will
+start a [`vite`](https://vitejs.dev/) dev server running both your application frontend, and the
+cloudflare workers backend via the [cloudflare vite
+plugin](https://developers.cloudflare.com/workers/vite-plugin/). The app & server should now be
+running at http://localhost:5137.
 
-```bash
-bun --version
-```
+The backend worker is under [`worker`](./worker/), and is split across several files:
 
-Run the command below to make a new bhvr project
+- **[`worker/worker.ts`](./worker/worker.ts):** the main entrypoint to the worker, defining each
+  route available.
+- **[`worker/TldrawDurableObject.ts`](./worker/TldrawDurableObject.ts):** the sync durable object.
+  An instance of this is created for every active room. This exposes a
+  [`TLSocketRoom`](https://tldraw.dev/reference/sync-core/TLSocketRoom) over websockets, and
+  periodically saves room data to R2.
+- **[`worker/assetUploads.ts`](./worker/assetUploads.ts):** uploads, downloads, and caching for
+  static assets like images and videos.
+- **[`worker/bookmarkUnfurling.ts`](./worker/bookmarkUnfurling.ts):** extract URL metadata for bookmark shapes.
 
-```bash
-bun create bhvr@latest my-app
-```
+The frontend client is under [`client`](./client):
 
-Once complete run the dev server
+- **[`client/App.tsx`](./client/App.tsx):** the main client `<App />` component. This connects our
+  sync backend to the `<Tldraw />` component, wiring in assets and bookmark previews.
+- **[`client/multiplayerAssetStore.tsx`](./client/multiplayerAssetStore.tsx):** how does the client
+  upload and retrieve assets like images & videos from the worker?
+- **[`client/getBookmarkPreview.tsx`](./client/getBookmarkPreview.tsx):** how does the client fetch
+  bookmark previews from the worker?
 
-```bash
-cd my-app
-bun dev
-```
-
-> [!NOTE]
-> Visit [bhvr.dev](https://bhvr.dev) for the full documentation!
+  ## Custom shapes
 
-## Features
+To add support for custom shapes, see the [tldraw sync custom shapes docs](https://tldraw.dev/docs/sync#Custom-shapes--bindings).
 
-- **Full-Stack TypeScript**: End-to-end type safety between client and server
-- **Shared Types**: Common type definitions shared between client and server
-- **Monorepo Structure**: Organized as a workspaces-based monorepo with Turbo for build orchestration
-- **Modern Stack**:
-  - [Bun](https://bun.sh) as the JavaScript runtime and package manager
-  - [Hono](https://hono.dev) as the backend framework
-  - [Vite](https://vitejs.dev) for frontend bundling
-  - [React](https://react.dev) for the frontend UI
-  - [Turbo](https://turbo.build) for monorepo build orchestration and caching
-
-## Project Structure
-
-```
-.
-├── client/               # React frontend
-├── server/               # Hono backend
-├── shared/               # Shared TypeScript definitions
-│   └── src/types/        # Type definitions used by both client and server
-├── package.json          # Root package.json with workspaces
-└── turbo.json            # Turbo configuration for build orchestration
-```
-
-### Server
-
-bhvr uses Hono as a backend API for its simplicity and massive ecosystem of plugins. If you have ever used Express then it might feel familiar. Declaring routes and returning data is easy.
-
-```
-server
-├── bun.lock
-├── package.json
-├── README.md
-├── src
-│   └── index.ts
-└── tsconfig.json
-```
-
-```typescript src/index.ts
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import type { ApiResponse } from 'shared/dist'
-
-const app = new Hono()
-
-app.use(cors())
-
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
-})
-
-app.get('/hello', async (c) => {
-
-  const data: ApiResponse = {
-    message: "Hello BHVR!",
-    success: true
-  }
-
-  return c.json(data, { status: 200 })
-})
-
-export default app
-```
-
-If you wanted to add a database to Hono you can do so with a multitude of Typescript libraries like [Supabase](https://supabase.com), or ORMs like [Drizzle](https://orm.drizzle.team/docs/get-started) or [Prisma](https://www.prisma.io/orm)
-
-### Client
-
-bhvr uses Vite + React Typescript template, which means you can build your frontend just as you would with any other React app. This makes it flexible to add UI components like [shadcn/ui](https://ui.shadcn.com) or routing using [React Router](https://reactrouter.com/start/declarative/installation).
-
-```
-client
-├── eslint.config.js
-├── index.html
-├── package.json
-├── public
-│   └── vite.svg
-├── README.md
-├── src
-│   ├── App.css
-│   ├── App.tsx
-│   ├── assets
-│   ├── index.css
-│   ├── main.tsx
-│   └── vite-env.d.ts
-├── tsconfig.app.json
-├── tsconfig.json
-├── tsconfig.node.json
-└── vite.config.ts
-```
-
-```typescript src/App.tsx
-import { useState } from 'react'
-import beaver from './assets/beaver.svg'
-import { ApiResponse } from 'shared'
-import './App.css'
-
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000"
-
-function App() {
-  const [data, setData] = useState<ApiResponse | undefined>()
-
-  async function sendRequest() {
-    try {
-      const req = await fetch(`${SERVER_URL}/hello`)
-      const res: ApiResponse = await req.json()
-      setData(res)
-    } catch (error) {
-      console.log(error)
-    }
-  }
-
-  return (
-    <>
-      <div>
-        <a href="https://github.com/stevedylandev/bhvr" target="_blank">
-          <img src={beaver} className="logo" alt="beaver logo" />
-        </a>
-      </div>
-      <h1>bhvr</h1>
-      <h2>Bun + Hono + Vite + React</h2>
-      <p>A typesafe fullstack monorepo</p>
-      <div className="card">
-        <button onClick={sendRequest}>
-          Call API
-        </button>
-        {data && (
-          <pre className='response'>
-            <code>
-            Message: {data.message} <br />
-            Success: {data.success.toString()}
-            </code>
-          </pre>
-        )}
-      </div>
-      <p className="read-the-docs">
-        Click the beaver to learn more
-      </p>
-    </>
-  )
-}
-
-export default App
-```
-
-### Shared
-
-The Shared package is used for anything you want to share between the Server and Client. This could be types or libraries that you use in both environments.
-
-```
-shared
-├── package.json
-├── src
-│   ├── index.ts
-│   └── types
-│       └── index.ts
-└── tsconfig.json
-```
-
-Inside the `src/index.ts` we export any of our code from the folders so it's usable in other parts of the monorepo
-
-```typescript
-export * from "./types"
-```
-
-By running `bun run dev` or `bun run build` it will compile and export the packages from `shared` so it can be used in either `client` or `server`
-
-```typescript
-import { ApiResponse } from 'shared'
-```
-
-## Getting Started
-
-### Quick Start
-
-You can start a new bhvr project using the [CLI](https://github.com/stevedylandev/create-bhvr)
-
-```bash
-bun create bhvr
-```
-
-### Installation
-
-```bash
-# Install dependencies for all workspaces
-bun install
-```
-
-### Development
-
-```bash
-# Run all workspaces in development mode with Turbo
-bun run dev
-
-# Or run individual workspaces directly
-bun run dev:client    # Run the Vite dev server for React
-bun run dev:server    # Run the Hono backend
-```
-
-### Building
-
-```bash
-# Build all workspaces with Turbo
-bun run build
-
-# Or build individual workspaces directly
-bun run build:client  # Build the React frontend
-bun run build:server  # Build the Hono backend
-```
-
-### Additional Commands
-
-```bash
-# Lint all workspaces
-bun run lint
-
-# Type check all workspaces
-bun run type-check
-
-# Run tests across all workspaces
-bun run test
-```
-
-### Deployment
-
-Deplying each piece is very versatile and can be done numerous ways, and exploration into automating these will happen at a later date. Here are some references in the meantime.
-
-**Client**
-- [Orbiter](https://bhvr.dev/deployment/client/orbiter)
-- [GitHub Pages](https://bhvr.dev/deployment/client/github-pages)
-- [Netlify](https://bhvr.dev/deployment/client/netlify)
-- [Cloudflare Pages](https://bhvr.dev/deployment/client/cloudflare-pages)
-
-**Server**
-- [Orbiter](https://bhvr.dev/deployment/server/orbiter)
-- [Cloudflare Worker](https://bhvr.dev/deployment/server/cloudflare-workers)
-- [Bun](https://bhvr.dev/deployment/server/railway)
-- [Node.js](https://bhvr.dev/deployment/server/railway)
-
-## Type Sharing
-
-Types are automatically shared between the client and server thanks to the shared package and TypeScript path aliases. You can import them in your code using:
-
-```typescript
-import { ApiResponse } from 'shared/types';
-```
-
-## Learn More
-
-- [bhvr Documentation](https://bhvr.dev)
-- [Bun Documentation](https://bun.sh/docs)
-- [Vite Documentation](https://vitejs.dev/guide/)
-- [React Documentation](https://react.dev/learn)
-- [Hono Documentation](https://hono.dev/docs)
-- [Turbo Documentation](https://turbo.build/docs)
-- [TypeScript Documentation](https://www.typescriptlang.org/docs/)
+## Adding cloudflare to your own repo
+
+If you already have an app using tldraw and want to use the system in this repo, you can copy and
+paste the relevant parts to your own app.
+
+To add the server to your own app, copy the contents of the [`worker`](./worker/) folder and
+[`./wrangler.toml`](./wrangler.toml) into your app. Add the dependencies from
+[`package.json`](./package.json). You can run the worker using `wrangler dev` in the same folder as
+`./wrangler.toml`.
+
+To point your existing client at the server defined in this repo, copy
+[`client/multiplayerAssetStore.tsx`](./client/multiplayerAssetStore.tsx) and
+[`client/getBookmarkPreview.tsx`](./client/getBookmarkPreview.tsx) into your app. Then, adapt the
+code from [`client/App.tsx`](./client/App.tsx) to your own app. Adapt the `/api/` URLs used in each
+of these files to point at your new `wrangler dev` server.
+
+## Deployment
+
+To deploy this example, you'll need to create a cloudflare account and create an R2 bucket to store
+your data. Update `bucket_name = 'tldraw-content'` in [`wrangler.toml`](./wrangler.toml) with the
+name of your new bucket.
+
+To actually deploy the app, first create a production build using `yarn build`. Then, run `yarn
+wrangler deploy`. This will deploy the backend worker along with the frontend app to cloudflare.
+This should give you a workers.dev URL, but you can also [configure a custom
+domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+## License
+
+This project is provided under the MIT license found [here](https://github.com/tldraw/tldraw-sync-cloudflare/blob/main/LICENSE.md). The tldraw SDK is provided under the [tldraw license](https://github.com/tldraw/tldraw/blob/main/LICENSE.md).
+
+## Trademarks
+
+Copyright (c) 2024-present tldraw Inc. The tldraw name and logo are trademarks of tldraw. Please see our [trademark guidelines](https://github.com/tldraw/tldraw/blob/main/TRADEMARKS.md) for info on acceptable usage.
+
+## Distributions
+
+You can find tldraw on npm [here](https://www.npmjs.com/package/@tldraw/tldraw?activeTab=versions).
+
+## Contribution
+
+Please see our [contributing guide](https://github.com/tldraw/tldraw/blob/main/CONTRIBUTING.md). Found a bug? Please [submit an issue](https://github.com/tldraw/tldraw/issues/new).
+
+## Community
+
+Have questions, comments or feedback? [Join our discord](https://discord.tldraw.com/?utm_source=github&utm_medium=readme&utm_campaign=sociallink). For the latest news and release notes, visit [tldraw.dev](https://tldraw.dev).
+
+## Contact
+
+Find us on Twitter/X at [@tldraw](https://twitter.com/tldraw).

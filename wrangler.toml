@@ -1,0 +1,32 @@
+name = "hat-trick"
+main = "worker/worker.ts"
+compatibility_date = "2025-05-08"
+compatibility_flags = ["nodejs_compat"]
+upload_source_maps = true
+preview_urls = true
+
+[observability]
+enabled = true
+
+[assets]
+not_found_handling = "single-page-application"
+directory = "./dist/client"
+
+# Set up the durable object used for each tldraw room
+[durable_objects]
+bindings = [
+    { name = "TLDRAW_DURABLE_OBJECT", class_name = "TldrawDurableObject" },
+]
+
+# Durable objects require migrations to create/modify/delete them
+[[migrations]]
+tag = "v1"
+new_classes = ["TldrawDurableObject"]
+
+# We store rooms and asset uploads in an R2 bucket
+# You'll need to create this bucket in Cloudflare dashboard:
+# R2 -> Create bucket -> name it "hat-trick"
+[[r2_buckets]]
+binding = 'TLDRAW_BUCKET'
+bucket_name = 'hat-trick'
+preview_bucket_name = 'hat-trick-preview'
