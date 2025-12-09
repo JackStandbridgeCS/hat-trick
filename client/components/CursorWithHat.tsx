@@ -38,7 +38,11 @@ export const CursorWithHat: React.FC<{
 					transform: 'translateX(-25%)',
 				}}
 			>
-				{hatData?.emoji || '🎩'}
+				<img
+					src={hatData?.imgUrl || HATS.tophat.imgUrl}
+					alt={hatData?.name || 'Hat'}
+					style={{ width: 20, height: 20, objectFit: 'contain' }}
+				/>
 			</div>
 
 			{/* Cursor SVG */}

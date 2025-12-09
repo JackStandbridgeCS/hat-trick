@@ -224,31 +224,20 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
       }
     }
 
-    // Built-in hat - use SVG with scaled size
+    // Built-in hat - use image
     const hatData = HATS[hatType as HatType];
+    const imgUrl = hatData?.imgUrl || HATS.tophat.imgUrl;
 
-    // Render SVG with new size using viewBox for scaling
     return (
-      <div
+      <img
+        src={imgUrl}
+        alt={hatData?.name || "Hat"}
         style={{
           width: size,
           height: size,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          objectFit: "contain",
         }}
-      >
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 32 32"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          style={{ width: size, height: size }}
-        >
-          {hatData?.svgContent || HATS.tophat.svgContent}
-        </svg>
-      </div>
+      />
     );
   };
 

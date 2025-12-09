@@ -53,7 +53,11 @@ export const CursorHats = track(function CursorHats() {
 							zIndex: 9999,
 						}}
 					>
-						{hatData?.emoji || '🎩'}
+						<img
+						src={hatData?.imgUrl || HATS.tophat.imgUrl}
+						alt={hatData?.name || 'Hat'}
+						style={{ width: 28, height: 28, objectFit: 'contain' }}
+					/>
 					</div>
 				)
 			})}
