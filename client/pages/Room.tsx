@@ -116,6 +116,7 @@ function RoomContent({
 		<>
 			<RoomWrapper roomId={roomId} userName={userInfo.name}>
 				<Tldraw
+          licenseKey='tldraw-2026-03-19/WyJ3Y21EMS1SVSIsWyIqIl0sMTYsIjIwMjYtMDMtMTkiXQ.8I0xARb9apxKZ8qvOTOcLot0dhCuP1SyDFsmhS0hnFeRs+RsbigdcAtQJ+r0N+yJ9D9zn7bQtwFC8Nls1y6IPQ'
 					store={store}
 					deepLinks
 					onMount={(e) => {
