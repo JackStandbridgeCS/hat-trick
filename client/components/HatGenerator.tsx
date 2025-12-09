@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { removeBackground } from "@imgly/background-removal";
 import { GoogleGenAI } from "@google/genai";
 import systemPrompt from "../prompt.txt?raw";
+import { uploadHatAsset } from "../hatAssetUpload";
 import "./HatGenerator.css";
 
 const HAT_IDEAS = [
@@ -26,14 +27,19 @@ const HAT_IDEAS = [
 interface HatGeneratorProps {
   isOpen: boolean;
   onClose: () => void;
-  onHatGenerated: (hatDataUrl: string, hatName: string) => void;
+  onHatGenerated: (
+    hatImageUrl: string,
+    hatName: string,
+    serverUrl: string | null
+  ) => void;
 }
 
 type GenerationStep =
   | "idle"
   | "generating-prompt"
   | "generating-image"
-  | "removing-bg";
+  | "removing-bg"
+  | "uploading";
 
 export function HatGenerator({
   isOpen,
@@ -47,6 +53,7 @@ export function HatGenerator({
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStep, setCurrentStep] = useState<GenerationStep>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [serverUrl, setServerUrl] = useState<string | null>(null);
 
   // Load saved API key from localStorage
   useEffect(() => {
@@ -173,7 +180,7 @@ export function HatGenerator({
 
   const removeImageBackground = async (
     imageBlob: Blob
-  ): Promise<string | null> => {
+  ): Promise<{ dataUrl: string; blob: Blob } | null> => {
     console.info(">>> Starting background removal", {
       size: imageBlob.size,
       type: imageBlob.type,
@@ -196,13 +203,13 @@ export function HatGenerator({
         resultSize: resultBlob.size,
       });
 
-      // Convert blob to data URL for storage
+      // Convert blob to data URL for preview
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const dataUrl = reader.result as string;
           setPreviewUrl(dataUrl);
-          resolve(dataUrl);
+          resolve({ dataUrl, blob: resultBlob });
         };
         reader.readAsDataURL(resultBlob);
       });
@@ -211,6 +218,24 @@ export function HatGenerator({
       setStatus(
         `❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`
       );
+      return null;
+    }
+  };
+
+  const uploadHatToServer = async (blob: Blob): Promise<string | null> => {
+    console.info(">>> Uploading hat to server");
+    setCurrentStep("uploading");
+    setStatus("☁️ Uploading hat to share with others...");
+
+    try {
+      const url = await uploadHatAsset(blob);
+      console.info(">>> Hat uploaded successfully", { url });
+      setServerUrl(url);
+      return url;
+    } catch (error) {
+      console.error(">>> Error uploading hat:", error);
+      // Non-fatal - hat will still work locally
+      setStatus("⚠️ Upload failed, hat will only be visible to you");
       return null;
     }
   };
@@ -253,9 +278,20 @@ export function HatGenerator({
       }
 
       // Step 3: Remove background
-      const dataUrl = await removeImageBackground(imageBlob);
-      if (dataUrl) {
-        setStatus('✅ Done! Click "Use This Hat" to wear it.');
+      const result = await removeImageBackground(imageBlob);
+      if (!result) {
+        setIsGenerating(false);
+        setCurrentStep("idle");
+        return;
+      }
+
+      // Step 4: Upload to server (so other users can see it)
+      const uploadedUrl = await uploadHatToServer(result.blob);
+
+      if (uploadedUrl) {
+        setStatus("✅ Done! Your hat will be visible to everyone in the room.");
+      } else {
+        setStatus('✅ Done! Click "Use This Hat" to wear it (local only).');
       }
     } finally {
       console.info(">>> Generation pipeline complete");
@@ -268,7 +304,7 @@ export function HatGenerator({
     if (previewUrl) {
       // Create a short name from the idea
       const hatName = hatIdea.slice(0, 30) + (hatIdea.length > 30 ? "..." : "");
-      onHatGenerated(previewUrl, hatName);
+      onHatGenerated(previewUrl, hatName, serverUrl);
       handleClose();
     }
   };
@@ -278,6 +314,7 @@ export function HatGenerator({
     setGeneratedPrompt("");
     setStatus("");
     setPreviewUrl(null);
+    setServerUrl(null);
     setCurrentStep("idle");
     onClose();
   };
@@ -295,11 +332,18 @@ export function HatGenerator({
     });
     setIsGenerating(true);
     setGeneratedPrompt("");
+    setServerUrl(null);
     setHatIdea(file.name.replace(/\.[^/.]+$/, ""));
 
-    const dataUrl = await removeImageBackground(file);
-    if (dataUrl) {
-      setStatus('✅ Done! Click "Use This Hat" to wear it.');
+    const result = await removeImageBackground(file);
+    if (result) {
+      // Upload to server so others can see it
+      const uploadedUrl = await uploadHatToServer(result.blob);
+      if (uploadedUrl) {
+        setStatus("✅ Done! Your hat will be visible to everyone in the room.");
+      } else {
+        setStatus('✅ Done! Click "Use This Hat" to wear it (local only).');
+      }
     }
     setIsGenerating(false);
   };
@@ -372,6 +416,8 @@ export function HatGenerator({
                 ? "🎨 Creating image..."
                 : currentStep === "removing-bg"
                 ? "✂️ Removing background..."
+                : currentStep === "uploading"
+                ? "☁️ Uploading..."
                 : "Working..."
               : "✨ Generate Hat"}
           </button>

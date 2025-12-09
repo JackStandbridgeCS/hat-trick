@@ -6,7 +6,9 @@ import {
   HatType,
   CustomHatData,
   isCustomHat,
+  isUrlHat,
   getCustomHatId,
+  getUrlHatUrl,
 } from "./Hats";
 import { getLocalStorageItem } from "../localStorage";
 
@@ -38,7 +40,9 @@ function loadCustomHats(): CustomHatData[] {
 
 export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
   const [hatPositions, setHatPositions] = useState<HatPosition[]>([]);
-  const [currentUserHat, setCurrentUserHat] = useState<HatPosition | null>(null);
+  const [currentUserHat, setCurrentUserHat] = useState<HatPosition | null>(
+    null
+  );
   const [customHats, setCustomHats] = useState<CustomHatData[]>([]);
 
   // Load custom hats and listen for storage changes
@@ -148,9 +152,25 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
 
   if (allHats.length === 0) return null;
 
-  // Render a hat (either built-in SVG or custom image)
+  // Render a hat (either built-in SVG, URL-based, or local custom)
   const renderHat = (hatType: string) => {
-    // Check if it's a custom hat
+    // URL-based hat (server-hosted, shareable!) - this is how other users see custom hats
+    if (isUrlHat(hatType)) {
+      const url = getUrlHatUrl(hatType);
+      return (
+        <img
+          src={url}
+          alt="Custom hat"
+          style={{
+            width: 40,
+            height: 40,
+            objectFit: "contain",
+          }}
+        />
+      );
+    }
+
+    // Local custom hat (only visible to the creator, stored in localStorage)
     if (isCustomHat(hatType)) {
       const customHatId = getCustomHatId(hatType);
       const customHat = customHats.find((h) => h.id === customHatId);
@@ -194,7 +214,9 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
             width: 32,
             height: 32,
             filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
-            transition: pos.isCurrentUser ? "none" : "left 0.05s linear, top 0.05s linear",
+            transition: pos.isCurrentUser
+              ? "none"
+              : "left 0.05s linear, top 0.05s linear",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

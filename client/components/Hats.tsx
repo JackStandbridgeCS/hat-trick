@@ -1,17 +1,30 @@
 // SVG Hat illustrations
 
-// Custom hat prefix for identifying custom hats in the encoded name
+// Custom hat prefix for identifying local custom hats (stored in localStorage)
 export const CUSTOM_HAT_PREFIX = 'custom:'
+
+// URL hat prefix for identifying server-hosted hats (shareable with other users)
+export const URL_HAT_PREFIX = 'url:'
 
 export interface CustomHatData {
 	id: string
 	name: string
-	imageUrl: string // data URL
+	imageUrl: string // Can be data URL (local) or server URL (shareable)
 }
 
-// Check if a hat type string represents a custom hat
+// Check if a hat type string represents a local custom hat
 export function isCustomHat(hatType: string): boolean {
 	return hatType.startsWith(CUSTOM_HAT_PREFIX)
+}
+
+// Check if a hat type string represents a URL-based hat (server-hosted, shareable)
+export function isUrlHat(hatType: string): boolean {
+	return hatType.startsWith(URL_HAT_PREFIX)
+}
+
+// Check if a hat is any kind of custom/generated hat (not built-in)
+export function isGeneratedHat(hatType: string): boolean {
+	return isCustomHat(hatType) || isUrlHat(hatType)
 }
 
 // Get custom hat ID from the hat type string
@@ -19,9 +32,19 @@ export function getCustomHatId(hatType: string): string {
 	return hatType.slice(CUSTOM_HAT_PREFIX.length)
 }
 
-// Create a hat type string from a custom hat ID
+// Get URL from a URL-based hat type
+export function getUrlHatUrl(hatType: string): string {
+	return hatType.slice(URL_HAT_PREFIX.length)
+}
+
+// Create a hat type string from a custom hat ID (local)
 export function makeCustomHatType(customHatId: string): string {
 	return `${CUSTOM_HAT_PREFIX}${customHatId}`
+}
+
+// Create a hat type string from a server URL (shareable)
+export function makeUrlHatType(url: string): string {
+	return `${URL_HAT_PREFIX}${url}`
 }
 
 export const HATS = {

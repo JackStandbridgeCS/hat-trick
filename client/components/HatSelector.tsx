@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { HATS, HatType, CustomHatData, isCustomHat, getCustomHatId, makeCustomHatType } from './Hats'
+import { HATS, HatType, CustomHatData, isCustomHat, isUrlHat, getCustomHatId, getUrlHatUrl, makeCustomHatType, makeUrlHatType } from './Hats'
 import { HatGenerator } from './HatGenerator'
 import { getLocalStorageItem, setLocalStorageItem } from '../localStorage'
 import './HatSelector.css'
@@ -57,19 +57,25 @@ export function HatSelector({ selectedHat, onSelectHat }: HatSelectorProps) {
 	const hatKeys = Object.keys(HATS) as HatType[]
 
 	// Handle new hat generated
-	const handleHatGenerated = (hatDataUrl: string, hatName: string) => {
+	const handleHatGenerated = (hatDataUrl: string, hatName: string, serverUrl: string | null) => {
 		const newHat: CustomHatData = {
 			id: `hat-${Date.now()}`,
 			name: hatName,
-			imageUrl: hatDataUrl,
+			// Store the server URL if available (for local display), fallback to data URL
+			imageUrl: serverUrl || hatDataUrl,
 		}
 
 		const updatedHats = [...customHats, newHat]
 		setCustomHats(updatedHats)
 		saveCustomHats(updatedHats)
 
-		// Automatically select the new hat
-		onSelectHat(makeCustomHatType(newHat.id))
+		// If we have a server URL, use the URL hat type (shareable with others!)
+		// Otherwise fall back to local custom hat type
+		if (serverUrl) {
+			onSelectHat(makeUrlHatType(serverUrl))
+		} else {
+			onSelectHat(makeCustomHatType(newHat.id))
+		}
 	}
 
 	// Handle deleting a custom hat
@@ -87,6 +93,18 @@ export function HatSelector({ selectedHat, onSelectHat }: HatSelectorProps) {
 
 	// Get display info for currently selected hat
 	const getSelectedHatDisplay = () => {
+		// URL-based hat (server-hosted, shareable)
+		if (isUrlHat(selectedHat)) {
+			const url = getUrlHatUrl(selectedHat)
+			// Try to find matching custom hat for the name
+			const matchingHat = customHats.find((h) => h.imageUrl === url)
+			return {
+				svg: null,
+				imageUrl: url,
+				name: matchingHat?.name || 'Custom Hat',
+			}
+		}
+		// Local custom hat (stored in localStorage)
 		if (isCustomHat(selectedHat)) {
 			const customHatId = getCustomHatId(selectedHat)
 			const customHat = customHats.find((h) => h.id === customHatId)
@@ -98,6 +116,7 @@ export function HatSelector({ selectedHat, onSelectHat }: HatSelectorProps) {
 				}
 			}
 		}
+		// Built-in hat
 		const hat = HATS[selectedHat as HatType]
 		return {
 			svg: hat?.svg || null,
