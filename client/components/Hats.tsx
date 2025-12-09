@@ -1,5 +1,29 @@
 // SVG Hat illustrations
 
+// Custom hat prefix for identifying custom hats in the encoded name
+export const CUSTOM_HAT_PREFIX = 'custom:'
+
+export interface CustomHatData {
+	id: string
+	name: string
+	imageUrl: string // data URL
+}
+
+// Check if a hat type string represents a custom hat
+export function isCustomHat(hatType: string): boolean {
+	return hatType.startsWith(CUSTOM_HAT_PREFIX)
+}
+
+// Get custom hat ID from the hat type string
+export function getCustomHatId(hatType: string): string {
+	return hatType.slice(CUSTOM_HAT_PREFIX.length)
+}
+
+// Create a hat type string from a custom hat ID
+export function makeCustomHatType(customHatId: string): string {
+	return `${CUSTOM_HAT_PREFIX}${customHatId}`
+}
+
 export const HATS = {
 	tophat: {
 		name: 'Top Hat',

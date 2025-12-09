@@ -11,6 +11,8 @@
 		"deploy": "wrangler deploy"
 	},
 	"dependencies": {
+		"@google/genai": "^1.32.0",
+		"@imgly/background-removal": "^1.7.0",
 		"@tldraw/sync": "^4.2.1",
 		"@tldraw/sync-core": "^4.2.1",
 		"@tldraw/tlschema": "^4.2.1",

@@ -4,7 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Editor, Tldraw, TLComponents, uniqueId } from "tldraw";
 import { CursorHatsOverlay } from "../components/CursorHatsOverlay";
 import { CustomCursor } from "../components/CustomCursor";
-import { HatType } from "../components/Hats";
 import { HatSelector } from "../components/HatSelector";
 import { NameModal } from "../components/NameModal";
 import { getBookmarkPreview } from "../getBookmarkPreview";
@@ -23,7 +22,7 @@ interface UserInfo {
   name: string;
   color: string;
   id: string;
-  hat: HatType;
+  hat: string; // Can be HatType or custom hat type string (e.g., "custom:hat-123")
 }
 
 export function Room() {
@@ -35,7 +34,7 @@ export function Room() {
   useEffect(() => {
     const storedName = getLocalStorageItem("user-name");
     const storedColor = getLocalStorageItem("user-color");
-    const storedHat = (getLocalStorageItem("user-hat") as HatType) || "tophat";
+    const storedHat = getLocalStorageItem("user-hat") || "tophat";
 
     if (storedName && storedColor) {
       setUserInfo({
@@ -51,8 +50,7 @@ export function Room() {
   function handleJoin(name: string, newRoomId: string) {
     const color = generateUserColor();
     const id = createUserId();
-    const hat: HatType =
-      (getLocalStorageItem("user-hat") as HatType) || "tophat";
+    const hat = getLocalStorageItem("user-hat") || "tophat";
 
     setLocalStorageItem("user-name", name);
     setLocalStorageItem("user-color", color);
@@ -91,7 +89,7 @@ function RoomContent({
 }: {
   roomId: string;
   userInfo: UserInfo;
-  onHatChange: (hat: HatType) => void;
+  onHatChange: (hat: string) => void;
 }) {
   const [editor, setEditor] = useState<Editor | null>(null);
 

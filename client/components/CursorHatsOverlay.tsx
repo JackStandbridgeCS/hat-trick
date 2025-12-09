@@ -1,105 +1,166 @@
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Editor } from 'tldraw'
-import { HATS, HatType } from './Hats'
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { Editor } from "tldraw";
+import {
+  HATS,
+  HatType,
+  CustomHatData,
+  isCustomHat,
+  getCustomHatId,
+} from "./Hats";
+import { getLocalStorageItem } from "../localStorage";
 
 interface CursorHatsOverlayProps {
-	editor: Editor | null
+  editor: Editor | null;
 }
 
 interface HatPosition {
-	id: string
-	x: number
-	y: number
-	hat: HatType
-	userName: string
+  id: string;
+  x: number;
+  y: number;
+  hatType: string; // Can be HatType or custom hat type
+  userName: string;
+}
+
+// Load custom hats from localStorage
+function loadCustomHats(): CustomHatData[] {
+  try {
+    const stored = getLocalStorageItem("custom-hats");
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.warn("Failed to load custom hats:", error);
+  }
+  return [];
 }
 
 export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
-	const [hatPositions, setHatPositions] = useState<HatPosition[]>([])
+  const [hatPositions, setHatPositions] = useState<HatPosition[]>([]);
+  const [customHats, setCustomHats] = useState<CustomHatData[]>([]);
 
-	useEffect(() => {
-		if (!editor) return
+  // Load custom hats and listen for storage changes
+  useEffect(() => {
+    setCustomHats(loadCustomHats());
 
-		// Function to update hat positions from collaborator presence
-		const updateHatPositions = () => {
-			const collaborators = editor.getCollaborators()
+    // Listen for storage changes to update custom hats
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "custom-hats") {
+        setCustomHats(loadCustomHats());
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
-			const positions: HatPosition[] = collaborators
-				.filter((c) => c.cursor !== null)
-				.map((collaborator) => {
-					// Parse the name to extract hat type: "Name|hatType"
-					const [displayName, hatType] = (collaborator.userName || '').split('|')
-					const hat = (hatType as HatType) in HATS ? (hatType as HatType) : 'tophat'
+  useEffect(() => {
+    if (!editor) return;
 
-					// Convert page coordinates to screen coordinates
-					const screenPoint = editor.pageToScreen({
-						x: collaborator.cursor!.x,
-						y: collaborator.cursor!.y,
-					})
+    // Function to update hat positions from collaborator presence
+    const updateHatPositions = () => {
+      const collaborators = editor.getCollaborators();
 
-					return {
-						id: collaborator.id,
-						x: screenPoint.x,
-						y: screenPoint.y,
-						hat,
-						userName: displayName || 'User',
-					}
-				})
+      const positions: HatPosition[] = collaborators
+        .filter((c) => c.cursor !== null)
+        .map((collaborator) => {
+          // Parse the name to extract hat type: "Name|hatType"
+          const [displayName, hatType] = (collaborator.userName || "").split(
+            "|"
+          );
 
-			setHatPositions(positions)
-		}
+          // Convert page coordinates to screen coordinates
+          const screenPoint = editor.pageToScreen({
+            x: collaborator.cursor!.x,
+            y: collaborator.cursor!.y,
+          });
 
-		// Initial update
-		updateHatPositions()
+          return {
+            id: collaborator.id,
+            x: screenPoint.x,
+            y: screenPoint.y,
+            hatType: hatType || "tophat",
+            userName: displayName || "User",
+          };
+        });
 
-		// Subscribe to store changes to update positions
-		const unsubscribe = editor.store.listen(updateHatPositions, {
-			source: 'all',
-			scope: 'presence',
-		})
+      setHatPositions(positions);
+    };
 
-		// Also listen for camera changes
-		editor.on('change', updateHatPositions)
+    // Initial update
+    updateHatPositions();
 
-		return () => {
-			unsubscribe()
-		}
-	}, [editor])
+    // Subscribe to store changes to update positions
+    const unsubscribe = editor.store.listen(updateHatPositions, {
+      source: "all",
+      scope: "presence",
+    });
 
-	if (hatPositions.length === 0) return null
+    // Also listen for camera changes
+    editor.on("change", updateHatPositions);
 
-	return createPortal(
-		<div
-			style={{
-				position: 'fixed',
-				inset: 0,
-				pointerEvents: 'none',
-				zIndex: 99998,
-			}}
-		>
-		{hatPositions.map((pos) => {
-			const hatData = HATS[pos.hat]
-			return (
-				<div
-					key={pos.id}
-					style={{
-						position: 'absolute',
-						left: pos.x,
-						top: pos.y - 40,
-						transform: 'translateX(-50%)',
-						width: 32,
-						height: 32,
-						filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
-						transition: 'left 0.05s linear, top 0.05s linear',
-					}}
-				>
-					{hatData?.svg}
-				</div>
-			)
-		})}
-		</div>,
-		document.body
-	)
+    return () => {
+      unsubscribe();
+    };
+  }, [editor]);
+
+  if (hatPositions.length === 0) return null;
+
+  // Render a hat (either built-in SVG or custom image)
+  const renderHat = (hatType: string) => {
+    // Check if it's a custom hat
+    if (isCustomHat(hatType)) {
+      const customHatId = getCustomHatId(hatType);
+      const customHat = customHats.find((h) => h.id === customHatId);
+      if (customHat) {
+        return (
+          <img
+            src={customHat.imageUrl}
+            alt={customHat.name}
+            style={{
+              width: 40,
+              height: 40,
+              objectFit: "contain",
+            }}
+          />
+        );
+      }
+    }
+
+    // Built-in hat - use SVG
+    const hatData = HATS[hatType as HatType];
+    return hatData?.svg || HATS.tophat.svg;
+  };
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        pointerEvents: "none",
+        zIndex: 99998,
+      }}
+    >
+      {hatPositions.map((pos) => (
+        <div
+          key={pos.id}
+          style={{
+            position: "absolute",
+            left: pos.x,
+            top: pos.y - 40,
+            transform: "translateX(-50%)",
+            width: 32,
+            height: 32,
+            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
+            transition: "left 0.05s linear, top 0.05s linear",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {renderHat(pos.hatType)}
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
 }
-
