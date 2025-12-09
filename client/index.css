@@ -54,6 +54,26 @@ body {
 	font-size: 14px;
 }
 
+.RoomWrapper-roomId {
+	font-family: 'SF Mono', 'Fira Code', monospace;
+	font-size: 13px;
+	opacity: 0.8;
+}
+
+.RoomWrapper-user {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+	margin-right: 8px;
+}
+
+.RoomWrapper-userName {
+	font-weight: 500;
+	font-size: 13px;
+	opacity: 0.9;
+}
+
 .RoomWrapper-copy {
 	background: var(--black-transparent-lighter);
 	border: 1px solid var(--gray-dark);
