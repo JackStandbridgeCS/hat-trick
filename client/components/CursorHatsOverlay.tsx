@@ -12,6 +12,9 @@ import {
 } from "./Hats";
 import { getLocalStorageItem } from "../localStorage";
 
+// Default hat size (doubled from original 32px)
+const DEFAULT_HAT_SIZE = 64;
+
 interface CursorHatsOverlayProps {
   editor: Editor | null;
 }
@@ -38,25 +41,57 @@ function loadCustomHats(): CustomHatData[] {
   return [];
 }
 
+// Load hat size from localStorage
+function loadHatSize(): number {
+  try {
+    const stored = getLocalStorageItem("user-hat-size");
+    if (stored) {
+      const size = parseInt(stored, 10);
+      if (!isNaN(size) && size >= 24 && size <= 128) {
+        return size;
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to load hat size:", error);
+  }
+  return DEFAULT_HAT_SIZE;
+}
+
 export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
   const [hatPositions, setHatPositions] = useState<HatPosition[]>([]);
   const [currentUserHat, setCurrentUserHat] = useState<HatPosition | null>(
     null
   );
   const [customHats, setCustomHats] = useState<CustomHatData[]>([]);
+  const [hatSize, setHatSize] = useState(DEFAULT_HAT_SIZE);
 
-  // Load custom hats and listen for storage changes
+  // Load custom hats, size, and listen for changes
   useEffect(() => {
     setCustomHats(loadCustomHats());
+    setHatSize(loadHatSize());
 
     // Listen for storage changes to update custom hats
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "custom-hats") {
         setCustomHats(loadCustomHats());
       }
+      if (e.key === "user-hat-size") {
+        setHatSize(loadHatSize());
+      }
     };
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+
+    // Listen for custom hat-size-changed event (from same window)
+    const handleHatSizeChanged = (e: Event) => {
+      const customEvent = e as CustomEvent<number>;
+      setHatSize(customEvent.detail);
+    };
+    window.addEventListener("hat-size-changed", handleHatSizeChanged);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("hat-size-changed", handleHatSizeChanged);
+    };
   }, []);
 
   useEffect(() => {
@@ -153,7 +188,7 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
   if (allHats.length === 0) return null;
 
   // Render a hat (either built-in SVG, URL-based, or local custom)
-  const renderHat = (hatType: string) => {
+  const renderHat = (hatType: string, size: number) => {
     // URL-based hat (server-hosted, shareable!) - this is how other users see custom hats
     if (isUrlHat(hatType)) {
       const url = getUrlHatUrl(hatType);
@@ -162,8 +197,8 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
           src={url}
           alt="Custom hat"
           style={{
-            width: 40,
-            height: 40,
+            width: size,
+            height: size,
             objectFit: "contain",
           }}
         />
@@ -180,8 +215,8 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
             src={customHat.imageUrl}
             alt={customHat.name}
             style={{
-              width: 40,
-              height: 40,
+              width: size,
+              height: size,
               objectFit: "contain",
             }}
           />
@@ -189,9 +224,32 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
       }
     }
 
-    // Built-in hat - use SVG
+    // Built-in hat - use SVG with scaled size
     const hatData = HATS[hatType as HatType];
-    return hatData?.svg || HATS.tophat.svg;
+
+    // Render SVG with new size using viewBox for scaling
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ width: size, height: size }}
+        >
+          {hatData?.svgContent || HATS.tophat.svgContent}
+        </svg>
+      </div>
+    );
   };
 
   return createPortal(
@@ -203,28 +261,36 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
         zIndex: 99998,
       }}
     >
-      {allHats.map((pos) => (
-        <div
-          key={pos.id}
-          style={{
-            position: "absolute",
-            left: pos.x,
-            top: pos.y - (pos.isCurrentUser ? 0 : 40),
-            transform: "translateX(-50%)",
-            width: 32,
-            height: 32,
-            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
-            transition: pos.isCurrentUser
-              ? "none"
-              : "left 0.05s linear, top 0.05s linear",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {renderHat(pos.hatType)}
-        </div>
-      ))}
+      {allHats.map((pos) => {
+        // Position hat above cursor tip
+        // Generated hat images have transparent padding around the visual content
+        // The actual hat visual is typically in the center ~60-70% of the image
+        // So we offset by about 60% of the hat size to get the visual near the cursor
+        const hatOffset = hatSize * 0.6;
+
+        return (
+          <div
+            key={pos.id}
+            style={{
+              position: "absolute",
+              left: pos.x,
+              top: pos.y - hatOffset,
+              transform: "translateX(-50%)",
+              width: hatSize,
+              height: hatSize,
+              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
+              transition: pos.isCurrentUser
+                ? "none"
+                : "left 0.05s linear, top 0.05s linear",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {renderHat(pos.hatType, hatSize)}
+          </div>
+        );
+      })}
     </div>,
     document.body
   );
