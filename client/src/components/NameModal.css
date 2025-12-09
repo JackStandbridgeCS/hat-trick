@@ -197,3 +197,15 @@
   margin: 0;
 }
 
+.input-hint {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #b45309;
+  opacity: 0.7;
+  margin: 4px 0 0 0;
+}
+
+.room-input {
+  font-family: 'SF Mono', 'Fira Code', 'DM Sans', monospace;
+  font-size: 16px;
+}

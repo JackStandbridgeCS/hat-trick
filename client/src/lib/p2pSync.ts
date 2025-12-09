@@ -1,7 +1,16 @@
-import { joinRoom, type Room } from "trystero/torrent";
+import { joinRoom, type Room } from "trystero/nostr";
 import type { Editor, TLRecord } from "tldraw";
 
 const APP_ID = "hats-whiteboard";
+
+// Nostr relays for P2P signaling
+// These are public relays that tend to be more accessible on restricted networks
+const NOSTR_RELAYS = [
+	"wss://relay.damus.io",
+	"wss://nos.lol",
+	"wss://relay.nostr.band",
+	"wss://nostr.wine",
+];
 
 interface PeerInfo {
 	id: string;
@@ -69,7 +78,14 @@ export function createP2PSync(roomId: string, _userInfo: PeerInfo): P2PSync {
 		if (room) return;
 
 		console.log("[P2P] Joining room:", roomId);
-		room = joinRoom({ appId: APP_ID }, roomId);
+		console.log("[P2P] Using Nostr relays:", NOSTR_RELAYS);
+
+		try {
+			room = joinRoom({ appId: APP_ID, relayUrls: NOSTR_RELAYS }, roomId);
+		} catch (err) {
+			console.error("[P2P] Failed to join room:", err);
+			return;
+		}
 
 		const [_sendStateRequest, onStateRequest] = room.makeAction<any>("req-state");
 		const [_sendFullState, onFullState] = room.makeAction<any>("full-state");
