@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Tldraw, type Editor } from "tldraw";
-import { createP2PSync, type P2PSync } from "../lib/p2pSync";
-import { useP2PPresence } from "../lib/useP2PPresence";
+import { createSupabaseSync, type SupabaseSync } from "../lib/supabaseSync";
+import { useSupabasePresence } from "../lib/useSupabasePresence";
 import "tldraw/tldraw.css";
 import "./Whiteboard.css";
 
@@ -22,62 +22,62 @@ export function Whiteboard({
 	const [isConnecting, setIsConnecting] = useState(true);
 	const [peerCount, setPeerCount] = useState(0);
 	const [connectionStatus, setConnectionStatus] = useState<
-		"connecting" | "connected" | "waiting"
+		"connecting" | "connected"
 	>("connecting");
 
-	// Create P2P sync instance
-	const p2pSync = useMemo<P2PSync | null>(() => {
+	// Create Supabase sync instance
+	const supabaseSync = useMemo<SupabaseSync | null>(() => {
 		if (!roomId) return null;
-		return createP2PSync(roomId, { id: userId, name: userName, color: userColor });
+		return createSupabaseSync(roomId, { id: userId, name: userName, color: userColor });
 	}, [roomId, userId, userName, userColor]);
 
-	// Handle tldraw mount
+	// Handle tldraw mount - NOTE: onMount cannot be async!
 	const handleMount = useCallback(
 		(e: Editor) => {
 			setEditor(e);
-			if (p2pSync) {
-				p2pSync.connect(e);
-				setIsConnecting(false);
-				setConnectionStatus("connected");
+			if (supabaseSync) {
+				// Connect asynchronously but don't await in the callback
+				supabaseSync.connect(e).then(() => {
+					setIsConnecting(false);
+					setConnectionStatus("connected");
+				});
 			}
 		},
-		[p2pSync],
+		[supabaseSync],
 	);
 
 	// Track peer count and connection status
 	useEffect(() => {
-		if (!p2pSync) return;
+		if (!supabaseSync) return;
 
 		const updatePeerCount = () => {
-			const count = p2pSync.getPeerCount();
+			const count = supabaseSync.getPeerCount();
 			setPeerCount(count);
 		};
 
-		p2pSync.onPeerJoin((peerId) => {
-			console.log("Peer joined:", peerId);
+		supabaseSync.onPeerJoin((oderId) => {
+			console.log("Peer joined:", oderId);
 			updatePeerCount();
 		});
 
-		p2pSync.onPeerLeave((peerId) => {
-			console.log("Peer left:", peerId);
+		supabaseSync.onPeerLeave((oderId) => {
+			console.log("Peer left:", oderId);
 			updatePeerCount();
 		});
 
+		// Check peer count after initial connection
 		const timeout = setTimeout(() => {
 			updatePeerCount();
-			if (p2pSync.getPeerCount() === 0) {
-				setConnectionStatus("waiting");
-			}
-		}, 3000);
+		}, 1000);
 
 		return () => {
 			clearTimeout(timeout);
-			p2pSync.disconnect();
+			supabaseSync.disconnect();
 		};
-	}, [p2pSync]);
+	}, [supabaseSync]);
 
 	// Sync presence
-	useP2PPresence(editor, p2pSync, {
+	useSupabasePresence(editor, supabaseSync, {
 		id: userId,
 		name: userName,
 		color: userColor,
@@ -95,16 +95,18 @@ export function Whiteboard({
 				</div>
 				<div className="peer-info">
 					<span
-						className={`status-dot ${peerCount > 0 ? "connected" : "alone"}`}
+						className={`status-dot ${connectionStatus === "connected" ? (peerCount > 0 ? "connected" : "alone") : ""}`}
 					/>
-					{peerCount > 0 ? (
-						<span>
-							{peerCount} other user{peerCount !== 1 ? "s" : ""} connected
-						</span>
-					) : connectionStatus === "waiting" ? (
-						<span>No one else here yet</span>
+					{connectionStatus === "connected" ? (
+						peerCount > 0 ? (
+							<span>
+								{peerCount} other user{peerCount !== 1 ? "s" : ""} connected
+							</span>
+						) : (
+							<span>No one else here yet</span>
+						)
 					) : (
-						<span>Searching for peers...</span>
+						<span>Connecting...</span>
 					)}
 				</div>
 			</div>
@@ -116,7 +118,7 @@ export function Whiteboard({
 						<div className="connecting-spinner" />
 						<p>Connecting to room...</p>
 						<p className="connecting-hint">
-							Looking for peers via BitTorrent DHT
+							Loading board from Supabase
 						</p>
 					</div>
 				</div>

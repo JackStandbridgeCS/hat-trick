@@ -5,7 +5,7 @@ import {
 	type TLInstancePresence,
 	TLINSTANCE_ID,
 } from "tldraw";
-import type { P2PSync, PresenceData } from "./p2pSync";
+import type { SupabaseSync, PresenceData } from "./supabaseSync";
 
 interface UserInfo {
 	id: string;
@@ -13,15 +13,15 @@ interface UserInfo {
 	color: string;
 }
 
-export function useP2PPresence(
+export function useSupabasePresence(
 	editor: Editor | null,
-	p2pSync: P2PSync | null,
+	supabaseSync: SupabaseSync | null,
 	userInfo: UserInfo,
 ) {
 	const presenceUpdateCallbackSet = useRef(false);
 
 	useEffect(() => {
-		if (!editor || !p2pSync) return;
+		if (!editor || !supabaseSync) return;
 
 		// Broadcast our presence periodically (throttled to reduce interference with gestures)
 		const interval = setInterval(() => {
@@ -41,23 +41,22 @@ export function useP2PPresence(
 				userName: userInfo.name,
 				color: userInfo.color,
 				cursor: pagePoint ? { x: pagePoint.x, y: pagePoint.y } : null,
-				chatMessage: null,
 				currentPageId: instance.currentPageId,
 			};
 
-			p2pSync.broadcastPresence(presenceData);
+			supabaseSync.broadcastPresence(presenceData);
 		}, 150); // ~7fps cursor updates, throttled during gestures
 
 		// Set up listener for other users' presence (only once)
 		if (!presenceUpdateCallbackSet.current) {
-			p2pSync.onPresenceUpdate((presence: PresenceData, peerId: string) => {
+			supabaseSync.onPresenceUpdate((presence: PresenceData, oderId: string) => {
 				if (!editor) return;
 
-				console.log("[Presence] Received from:", peerId, presence);
+				console.log("[Presence] Received from:", oderId, presence);
 
 				try {
 					// Create a presence record for this peer
-					const presenceId = InstancePresenceRecordType.createId(peerId);
+					const presenceId = InstancePresenceRecordType.createId(oderId);
 
 					// Get the current instance to extract required fields
 					const instance = editor.store.get(TLINSTANCE_ID);
@@ -86,7 +85,7 @@ export function useP2PPresence(
 								},
 						currentPageId:
 							presence.currentPageId as TLInstancePresence["currentPageId"],
-						chatMessage: presence.chatMessage ?? "",
+						chatMessage: "",
 						brush: null,
 						scribbles: [],
 						screenBounds: { x: 0, y: 0, w: 1920, h: 1080 },
@@ -97,7 +96,7 @@ export function useP2PPresence(
 						selectedShapeIds: [],
 					};
 
-					console.log("[Presence] Creating record for:", peerId);
+					console.log("[Presence] Creating record for:", oderId);
 
 					editor.store.mergeRemoteChanges(() => {
 						editor.store.put([presenceRecord]);
@@ -112,5 +111,6 @@ export function useP2PPresence(
 		return () => {
 			clearInterval(interval);
 		};
-	}, [editor, p2pSync, userInfo]);
+	}, [editor, supabaseSync, userInfo]);
 }
+

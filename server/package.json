@@ -8,6 +8,7 @@
     "dev": "bun --watch run src/index.ts & tsc --watch"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.0",
     "hono": "^4.7.11",
     "shared": "workspace:*"
   },

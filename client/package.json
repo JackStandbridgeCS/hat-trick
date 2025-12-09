@@ -9,14 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.0",
     "@tanstack/react-router": "^1.140.0",
     "@tanstack/react-router-devtools": "^1.140.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "server": "workspace:*",
     "shared": "workspace:*",
-    "tldraw": "^4.2.1",
-    "trystero": "^0.22.0"
+    "tldraw": "^4.2.1"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "^1.140.0",

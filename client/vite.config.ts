@@ -11,7 +11,4 @@ export default defineConfig({
 		}),
 		react(),
 	],
-	optimizeDeps: {
-		include: ["trystero/torrent"],
-	},
 });
