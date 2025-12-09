@@ -20,6 +20,7 @@ interface HatPosition {
   y: number;
   hatType: string; // Can be HatType or custom hat type
   userName: string;
+  isCurrentUser?: boolean;
 }
 
 // Load custom hats from localStorage
@@ -37,6 +38,7 @@ function loadCustomHats(): CustomHatData[] {
 
 export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
   const [hatPositions, setHatPositions] = useState<HatPosition[]>([]);
+  const [currentUserHat, setCurrentUserHat] = useState<HatPosition | null>(null);
   const [customHats, setCustomHats] = useState<CustomHatData[]>([]);
 
   // Load custom hats and listen for storage changes
@@ -84,6 +86,20 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
         });
 
       setHatPositions(positions);
+
+      // Update current user's hat position based on mouse position
+      const currentHat = getLocalStorageItem("user-hat") || "tophat";
+      const currentUserName = getLocalStorageItem("user-name") || "You";
+      const { currentScreenPoint } = editor.inputs;
+
+      setCurrentUserHat({
+        id: "current-user",
+        x: currentScreenPoint.x,
+        y: currentScreenPoint.y,
+        hatType: currentHat,
+        userName: currentUserName,
+        isCurrentUser: true,
+      });
     };
 
     // Initial update
@@ -95,15 +111,42 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
       scope: "presence",
     });
 
+    // Also listen for pointer move to update current user's hat
+    const handlePointerMove = () => {
+      const currentHat = getLocalStorageItem("user-hat") || "tophat";
+      const currentUserName = getLocalStorageItem("user-name") || "You";
+      const { currentScreenPoint } = editor.inputs;
+
+      setCurrentUserHat({
+        id: "current-user",
+        x: currentScreenPoint.x,
+        y: currentScreenPoint.y,
+        hatType: currentHat,
+        userName: currentUserName,
+        isCurrentUser: true,
+      });
+    };
+
+    // Listen for pointer events on the container
+    const container = editor.getContainer();
+    container.addEventListener("pointermove", handlePointerMove);
+
     // Also listen for camera changes
     editor.on("change", updateHatPositions);
 
     return () => {
       unsubscribe();
+      container.removeEventListener("pointermove", handlePointerMove);
     };
   }, [editor]);
 
-  if (hatPositions.length === 0) return null;
+  // Combine all hats (collaborators + current user)
+  const allHats = [...hatPositions];
+  if (currentUserHat) {
+    allHats.push(currentUserHat);
+  }
+
+  if (allHats.length === 0) return null;
 
   // Render a hat (either built-in SVG or custom image)
   const renderHat = (hatType: string) => {
@@ -140,18 +183,18 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
         zIndex: 99998,
       }}
     >
-      {hatPositions.map((pos) => (
+      {allHats.map((pos) => (
         <div
           key={pos.id}
           style={{
             position: "absolute",
             left: pos.x,
-            top: pos.y - 40,
+            top: pos.y - (pos.isCurrentUser ? 0 : 40),
             transform: "translateX(-50%)",
             width: 32,
             height: 32,
             filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))",
-            transition: "left 0.05s linear, top 0.05s linear",
+            transition: pos.isCurrentUser ? "none" : "left 0.05s linear, top 0.05s linear",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

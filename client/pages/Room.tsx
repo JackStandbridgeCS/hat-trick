@@ -5,6 +5,7 @@ import { Editor, Tldraw, TLComponents, uniqueId } from "tldraw";
 import { CursorHatsOverlay } from "../components/CursorHatsOverlay";
 import { CustomCursor } from "../components/CustomCursor";
 import { HatSelector } from "../components/HatSelector";
+import { HatThrowOverlay } from "../components/HatThrowOverlay";
 import { NameModal } from "../components/NameModal";
 import { getBookmarkPreview } from "../getBookmarkPreview";
 import { getLocalStorageItem, setLocalStorageItem } from "../localStorage";
@@ -92,6 +93,7 @@ function RoomContent({
   onHatChange: (hat: string) => void;
 }) {
   const [editor, setEditor] = useState<Editor | null>(null);
+  const navigate = useNavigate();
 
   // Encode hat type in the name field (format: "Name|hatType")
   // This is necessary because tldraw's userInfo only supports id, name, color
@@ -117,8 +119,6 @@ function RoomContent({
         },
       });
 
-  const navigate = useNavigate();
-
   return (
     <>
       <RoomWrapper
@@ -138,6 +138,7 @@ function RoomContent({
         />
       </RoomWrapper>
       <CursorHatsOverlay editor={editor} />
+      <HatThrowOverlay editor={editor} />
       <HatSelector selectedHat={userInfo.hat} onSelectHat={onHatChange} />
     </>
   );
