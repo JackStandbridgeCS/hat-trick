@@ -1,8 +1,9 @@
 import { useSync, useSyncDemo } from '@tldraw/sync'
 import { ReactNode, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Editor, Tldraw, uniqueId } from 'tldraw'
+import { Editor, Tldraw, TLComponents, uniqueId } from 'tldraw'
 import { CursorHatsOverlay } from '../components/CursorHatsOverlay'
+import { CustomCursor } from '../components/CustomCursor'
 import { HatType } from '../components/Hats'
 import { HatSelector } from '../components/HatSelector'
 import { NameModal } from '../components/NameModal'
@@ -12,6 +13,11 @@ import { multiplayerAssetStore } from '../multiplayerAssetStore'
 
 // Check if we're running on Cloudflare (production) or locally
 const isProduction = import.meta.env.PROD
+
+// Custom components - use our cursor that strips hat type from display name
+const components: TLComponents = {
+	Cursor: CustomCursor,
+}
 
 interface UserInfo {
 	name: string
@@ -116,9 +122,10 @@ function RoomContent({
 		<>
 			<RoomWrapper roomId={roomId} userName={userInfo.name}>
 				<Tldraw
-          licenseKey='tldraw-2026-03-19/WyJ3Y21EMS1SVSIsWyIqIl0sMTYsIjIwMjYtMDMtMTkiXQ.8I0xARb9apxKZ8qvOTOcLot0dhCuP1SyDFsmhS0hnFeRs+RsbigdcAtQJ+r0N+yJ9D9zn7bQtwFC8Nls1y6IPQ'
+					licenseKey='tldraw-2026-03-19/WyJ3Y21EMS1SVSIsWyIqIl0sMTYsIjIwMjYtMDMtMTkiXQ.8I0xARb9apxKZ8qvOTOcLot0dhCuP1SyDFsmhS0hnFeRs+RsbigdcAtQJ+r0N+yJ9D9zn7bQtwFC8Nls1y6IPQ'
 					store={store}
 					deepLinks
+					components={components}
 					onMount={(e) => {
 						setEditor(e)
 						e.registerExternalAssetHandler('url', getBookmarkPreview)

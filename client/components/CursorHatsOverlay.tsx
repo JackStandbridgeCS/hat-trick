@@ -78,26 +78,26 @@ export function CursorHatsOverlay({ editor }: CursorHatsOverlayProps) {
 				zIndex: 99998,
 			}}
 		>
-			{hatPositions.map((pos) => {
-				const hatData = HATS[pos.hat]
-				return (
-					<div
-						key={pos.id}
-						style={{
-							position: 'absolute',
-							left: pos.x,
-							top: pos.y - 52,
-							transform: 'translateX(-50%)',
-							fontSize: '32px',
-							lineHeight: 1,
-							filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
-							transition: 'left 0.05s linear, top 0.05s linear',
-						}}
-					>
-						{hatData?.emoji || '🎩'}
-					</div>
-				)
-			})}
+		{hatPositions.map((pos) => {
+			const hatData = HATS[pos.hat]
+			return (
+				<div
+					key={pos.id}
+					style={{
+						position: 'absolute',
+						left: pos.x,
+						top: pos.y - 40,
+						transform: 'translateX(-50%)',
+						width: 32,
+						height: 32,
+						filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
+						transition: 'left 0.05s linear, top 0.05s linear',
+					}}
+				>
+					{hatData?.svg}
+				</div>
+			)
+		})}
 		</div>,
 		document.body
 	)

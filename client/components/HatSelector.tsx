@@ -56,7 +56,9 @@ export function HatSelector({ selectedHat, onSelectHat }: HatSelectorProps) {
 				aria-label="Select your hat"
 				aria-expanded={isOpen}
 			>
-				<span style={{ fontSize: '24px' }}>{HATS[selectedHat]?.emoji || '🎩'}</span>
+				<span style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+				{HATS[selectedHat]?.svg}
+			</span>
 				<span>{HATS[selectedHat]?.name || 'Hat'}</span>
 				<span style={{ fontSize: '10px' }}>{isOpen ? '▼' : '▲'}</span>
 			</button>
@@ -97,7 +99,9 @@ export function HatSelector({ selectedHat, onSelectHat }: HatSelectorProps) {
 								setIsOpen(false)
 							}}
 						>
-							<span style={{ fontSize: '24px' }}>{HATS[hatKey].emoji}</span>
+							<span style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+							{HATS[hatKey].svg}
+						</span>
 							<span style={{ flex: 1, fontSize: '14px' }}>{HATS[hatKey].name}</span>
 							{selectedHat === hatKey && <span style={{ color: '#f59e0b' }}>✓</span>}
 						</button>
