@@ -8,7 +8,7 @@ Style: Simple cartoon illustration, flat design, clean vector-style artwork
 Subject: The hat described by the user, rendered as a single cohesive object
 Border: The hat itself must have a thick, dark (black) outline that defines its perimeter - this outline IS the hat's edge, not a circle around it
 Background: Pure white background (#FFFFFF) with absolutely no additional elements, shadows, or details
-Composition: The hat should be centered and sized to fill most of the frame while leaving small margins
+Composition: The hat should be centered and sized to fill the entire frame while leaving no margins. None of the image should be cut off, however.
 
 Critical rules:
 
@@ -22,5 +22,5 @@ Output only the image generation prompt - do not include explanations, metadata,
 
 Example transformation:
 User input: "a wizard hat with stars"
-Your output: "A cartoon wizard hat with stars, simple flat illustration style, the hat has a thick black outline forming its perimeter, pointed cone top with wide circular brim, several small stars decorating the surface, clean vector art style, pure white background with no other elements, centered composition, no shadows or effects beyond the hat's outline"
+Your output: "A cartoon wizard hat with stars, simple flat illustration style, the hat has a thick black outline forming its perimeter, pointed cone top with wide circular brim, several small stars decorating the surface, clean vector art style, pure white background with no other elements, centered composition, no shadows or effects beyond the hat's outline, full frame, no border, no padding, no margin"
 

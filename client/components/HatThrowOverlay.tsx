@@ -141,7 +141,7 @@ export function HatThrowOverlay({ editor }: HatThrowOverlayProps) {
 
 			// Only throw if there's significant drag
 			if (distance > 20) {
-				const hatType = getLocalStorageItem('user-hat') || 'cowboy'
+				const hatType = getLocalStorageItem('user-hat') || 'tophat'
 
 				const newHat: ThrownHat = {
 					id: `thrown-${Date.now()}-${Math.random()}`,
@@ -289,7 +289,7 @@ function PowerArrow({ editor, dragState, customHats }: { editor: Editor; dragSta
 	const power = Math.min(distance / 150, 1)
 	const hue = 120 - power * 120 // Green to red
 
-	const currentHatType = getLocalStorageItem('user-hat') || 'cowboy'
+	const currentHatType = getLocalStorageItem('user-hat') || 'tophat'
 
 	// Render the hat preview (built-in or custom)
 	const renderHatPreview = () => {
